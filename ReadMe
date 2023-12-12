@@ -1,0 +1,61 @@
+# connection sur k8s digital ocean
+create le cluster sur https://cloud.digitalocean.com
+download du fichier de config dans ~/.kube/config
+kubectl get nodes // liste  les nodes du cluster
+kubectl config view // visualise la config entiere
+kubectl config get-contexts 
+kubectl config use-context do-fra1-k8s-1-28-2-do-0-fra1-1702225024742  // utilisation du cluter de digitalocean
+
+
+# Cloner le code dans le repertoire app
+git clone https://francois@github.com/fpicot31/k8s-project1.git
+
+
+### un seul node : Service NodePort ####
+
+# creer l'image sur le docker ub
+docker build -t atos06/project1-html .
+docker run -d --name test -p 8082:80 atos06/project1-html
+docker push  atos06/project1-html
+
+# deployer l'aplication dans le cluster
+kubectl config current-context
+kubectl apply -f medium-deployment.yaml 
+kubectl get pod
+
+# creer et lancer un service sur le port 30000 par exemple
+kubectl apply -f medium-service.yaml 
+kubectl get all
+
+# reecuperer l'IP publique externe
+kubectl get node -o wide
+
+#ouvrir le navigateur exemple 31233
+EXTERNAL_IP:PORT
+
+
+
+### un 3 node : Service loadbalancer ####
+
+# changer le nombre de node sur digital ocean : on passe de 1 a 3 nodes
+kubectl get nodes
+kubectl delete service medium-service
+kubectl apply -f medium-deployment-replicas.yaml 
+
+# repartir les pods sur des nodes differents
+kubectl get pod -o wide
+kubectl delete pod <nom pod>
+kubectl get pod -o wide
+
+# lancer le service de load balancer
+kubectl apply -f medium-service-lb.yaml 
+
+# voir sur digital ocean la creation du lb
+
+# recuperer l'EXTERNAL IP du lb
+kubectl get svc
+
+# ouvrir le navigateur avec l'IP et rafraicihr plusisieurs fois
+
+# creer un nom de domaine sur lws et mettre l'ip du loadbalancer
+
