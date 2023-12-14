@@ -23,21 +23,26 @@ spec:
     spec:
       terminationGracePeriodSeconds: 10
       containers:
-      - name: mysql-container
-        image: mysql:8
-        env:
-        - name: MYSQL_ROOT_PASSWORD
-          value: Pomme123;
-        - name: MYSQL_DATABASE
-          value: "blog"
-        volumeMounts:
-        - mountPath: /var/lib/mysql
-          name: mysql-volume
+        - name: mysql-container
+          image: mysql:8
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: Pomme123;
+            - name: MYSQL_DATABASE
+              value: blog
+          volumeMounts:
+            - name: mysql-volume
+              mountPath: /var/lib/mysql
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
   volumeClaimTemplates:
-  - metadata:
-      name: mysql-volume
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      resources:
-        requests:
-          storage: 1Gi
+    - metadata:
+        name: mysql-volume
+      spec:
+        accessModes: ['ReadWriteOnce']
+        resources:
+          requests:
+            storage: 1Gi
