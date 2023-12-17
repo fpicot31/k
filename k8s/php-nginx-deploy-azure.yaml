@@ -44,4 +44,10 @@ spec:
           image: atos06/blog-nginx
           ports:
             - containerPort: 80
+      # A utiliser seulement pour azure
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
 

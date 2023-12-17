@@ -1,0 +1,9 @@
+# A utiliser seulement pour azure
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: loki
+  annotations:
+    scheduler.alpha.kubernetes.io/defaultTolerations: '[{"Key": "CriticalAddonsOnly", "Operator": "Equal", "Value": "true", "Effect": "NoSchedule"}]'
+    scheduler.alpha.kubernetes.io/node-selector: "CriticalAddonsOnly=true"
+    

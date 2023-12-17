@@ -33,6 +33,11 @@ spec:
           volumeMounts:
             - name: mysql-volume
               mountPath: /var/lib/mysql
+      tolerations:
+        - key: CriticalAddonsOnly
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
   volumeClaimTemplates:
     - metadata:
         name: mysql-volume

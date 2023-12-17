@@ -1,61 +1,175 @@
-# connection sur k8s digital ocean
+### connection sur AWS ####
+
+# aller sur
+https://portal.azure.com
+login : fpicot31@outlook.fr
+pwd : Francois0504 !
+
+chercher service kubernetes, puis creer :
+detail du cluster : choisir economie de production
+nom : cformidable
+region : france centre
+creer une resource : cformidable
+ne garder qu'nu seul node "agentpool" qui a seuelement 2 pods. on supprimme le second pod
+passer le node agentpool en manuel
+taille de noeud b2s
+
+# installer azure CLI en cliquant sur connect et sur Azure CLI
+# dans le terminal :
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+sudo az aks install-cli
+az login // ouverture du navigateur fpicot31@outlook.fr/Francois0504!
+az account set --subscription 36c7d80f-d53e-47aa-87d9-40019c3083da
+az aks get-credentials --resource-group cformidable --name cformidable
+
+# verifier le context
+kubectl config get-contexts
+kubectl config current-context
+
+
+### connection sur digital ocean ####
+
+# creer le cluster sur digital ocean
 create le cluster sur https://cloud.digitalocean.com
-download du fichier de config dans ~/.kube/config
-kubectl get nodes // liste  les nodes du cluster
+download du fichier de config dans ~/.kube/config (scp k8s-1-28-2-do-0-fra14424-kubeconfig.yaml francois@192.168.56.108:~/.kube
+)
 kubectl config view // visualise la config entiere
 kubectl config get-contexts 
 kubectl config use-context do-fra1-k8s-1-28-2-do-0-fra1-1702225024742  // utilisation du cluter de digitalocean
-
-
-# Cloner le code dans le repertoire app
-git clone https://francois@github.com/fpicot31/k8s-project1.git
-
-
-### un seul node : Service NodePort ####
-
-# creer l'image sur le docker ub
-docker build -t atos06/project1-html .
-docker run -d --name test -p 8082:80 atos06/project1-html
-docker push  atos06/project1-html
-
-# deployer l'aplication dans le cluster
-kubectl config current-context
-kubectl apply -f medium-deployment.yaml 
-kubectl get pod
-
-# creer et lancer un service sur le port 30000 par exemple
-kubectl apply -f medium-service.yaml 
+kubectl config current-context 
 kubectl get all
-
-# reecuperer l'IP publique externe
-kubectl get node -o wide
-
-#ouvrir le navigateur exemple 31233
-EXTERNAL_IP:PORT
+kubect get nodes // liste  les nodes du cluster
 
 
+## creation des images nginx et  php sur dockerhub ###
 
-### un 3 node : Service loadbalancer ####
+# Cloner le code du projet dans le repertoire app
+git clone https://francois@github.com/fpicot31/k8s-AKS.git
 
-# changer le nombre de node sur digital ocean : on passe de 1 a 3 nodes
-kubectl get nodes
-kubectl delete service medium-service
-kubectl apply -f medium-deployment-replicas.yaml 
+# creer l'image blog-nginx sur le docker hub
+cd nginx
+docker build -t atos06/blog-nginx .
+docker push  atos06/blog-nginx
 
-# repartir les pods sur des nodes differents
+# creer l'image blog-php-fpm sur le docker hub
+cd php
+docker build -t atos06/blog-php-fpm .
+docker push  atos06/blog-php-fpm
+
+## creation du cluster k8s (attention aux fichiers azure)#####
+
+# creer le sts
+cd k8s
+kubectl apply -f my-sql-statefulset.yaml
+kubectl get all
 kubectl get pod -o wide
-kubectl delete pod <nom pod>
-kubectl get pod -o wide
+kubectl apply -f my-sql-service.yaml
 
-# lancer le service de load balancer
-kubectl apply -f medium-service-lb.yaml 
+# si on veut faire un test pour voir si le pod mysql repond  bien
+# on cree un container de test sur le cluster
+kubectl run -it --rm test --image=alpine -- sh
+nc -z mysql-service 3306 // ca repond
+apk add netcat-openbsd // pour installer netcat
+#ouvrir un terminal et detruire le pod mysql
+kubectl get all
+kubectl delete pod mysql-statefulset-0
+# refaire un netcat
+nc -z mysql-service 3306 // ca repond pas
 
-# voir sur digital ocean la creation du lb
+# deployer les pods
+kubectl apply -f php-nginx-deploy.yaml
+kubectl  get pods
+kubectl exec -it php-nginx-deploy-id-du-pod -- sh // ou kubectl exec php-nginx-deploy-id-du-pod -- ls /app
+cd /app  // on a bien tous les fichiers php
+kubectl  logs php-nginx-deployment-7c67cf7976-4p4xb -c init-mysql  // on a mysql is ready et seed script executed
 
-# recuperer l'EXTERNAL IP du lb
-kubectl get svc
+# creer le loadbalancer
+kubectl apply -f php-nginx-service-lb.yaml
+kubectl get service -w // recuper l'IP EXTERNAL
 
-# ouvrir le navigateur avec l'IP et rafraicihr plusisieurs fois
+# ouvrir le navigateur a l'IP et le blog s'affiche
+# aller sur lws et mettre l'IP dans le nom de domaine cformidable.site
+# aller sur Azure et regader dans le cluster k8s et regarder les pods et les services et storage
 
-# creer un nom de domaine sur lws et mettre l'ip du loadbalancer
+# si on veut destruire  et recreer le cluster
+cd projet-AKS
+kubectl delete -f k8s/
+kubectl get all
+kubectl get pvc // est toujours là
+kubectl apply -f k8s/   // on a tout recréé avec la meme bd et la meme ip
+kubectl get service -w   
+
+# utiliser l'application blog
+# recuperer l'IP EXTERNAL et ouvrir dans le navigateur avec http
+kubectl get service -w   
+# exemple : http://20.19.10.222
+
+# passer à 3 replicas dans php-nginx-deploy.yaml
+kubectl apply -f php-nginx-deploy.yaml
+
+
+####  Monitoring ###
+
+# creation d un name space pour le monitirong
+kubectl apply -f loki-values.yaml // uniquement pour azure
+kubectl create ns loki // uniquement pour les autres
+kubectl get ns
+(si on veut detruire les resources de ns loki et recommencer : kubectl delete namespace loki)
+
+# installation grafana+loki+promtail
+sudo snap install helm --classic
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repos update
+helm search repo grafana
+
+# installation loki
+helm install --namespace loki logging grafana/loki -f loki-values.yaml
+kubectl -n loki get pods
+kubectl -n loki get all
+kubectl describe pod/loki-backend-0 -n loki
+
+# installation grafana
+helm install --namespace loki grafana  grafana/grafana 
+
+# installation promptail
+helm install --namespace loki --set loki.serviceName=loki-gateway promtail grafana/promtail 
+
+# connexion à grafana
+kubectl get secret --namespace loki grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+// copier  le mot de passe
+export POD_NAME=$(kubectl get pods --namespace loki -l "app.kubernetes.io/name=grafana,app.kubernetes.io/instance=grafana" -o jsonpath="{.items[0].metadata.name}")
+kubectl --namespace loki port-forward $POD_NAME 3000:3000
+// aller dans le navigateur : http://localhost:3000
+// login : admin et password
+// cliquer sur Data sources, puis loki
+// entrer l'url http://loki-gateway.loki.svc.cluster.local
+// cliquer sur Save & Test
+
+# creer une alerte
+// Aller dans grafana
+// Grafana > Alerting > Contact Points > Add Contact point
+// Telegram et dans Integration > Telegram
+// creer le bot dans Telegram et recuperer le TPOKEN
+// https://api.telegram.org/bot<VOTE_TOKEN_API>/getUpdates
+
+https://api.telegram.org/bot<VOTE_TOKEN_API>/getUpdates
+
+
+# Installation Prometheus
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm install --namespace loki prometheus-community prometheus-community/prometheus 
+// Entrer dans grafana une nouvelle datasource promtetheus avec le end point
+http://prometheus-server.loki.svc.cluster.local
+
+
+# Dashboad grafana
+Dashboard->new->import et entrer 15479 et data source Prometheus
+
+
+
+# supprimer le cluster cformidable
+az group delete --name cformidalble --yes --no-wait
+
+# supprimer les elements du cluster
+kubectl delete all --all -n loki --force
 
